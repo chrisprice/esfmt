@@ -1,8 +1,8 @@
 var parse = require('esprima').parse,
-	readFileSync = require('fs').readFileSync;
 	replaceNode = require('estraverse').replace,
 	traverseNode = require('estraverse').traverse,
-	generate = require('escodegen').generate;
+	generate = require('escodegen').generate,
+	input = require('./lib/parse');
 
 var argv = require('optimist')
 	.usage('$0 [flags] [path ...]')
@@ -10,51 +10,53 @@ var argv = require('optimist')
 	.describe('r', 'Apply the rewrite rule to the source before reformatting.')
 	.argv;
 
-var ruleParts = argv.r.split('->');
-var rule = {
-	raw: argv.r,
-	pattern: parse(ruleParts[0]).body[0].expression,
-	replacement: parse(ruleParts[1]).body[0]
-};
+if (argv.r) {
+	var ruleParts = argv.r.split('->');
+	var rule = {
+		raw: argv.r,
+		pattern: parse(ruleParts[0]).body[0].expression,
+		replacement: parse(ruleParts[1]).body[0].expression
+	};
 
-var inputPath = argv._[0];
-//console.log(inputPath);
-var input = parse(readFileSync(inputPath, 'utf8'));
-
-console.log(rule);
-
-
-function nodesMatch(node, pattern) {
-	if (Object.keys(node).length !== Object.keys(pattern).length) {
-		return false;
-	}
-	return Object.keys(node)
-		.reduce(function(result, key) {
-			if (!result) {
-				return false;
-			}
-			if (typeof(node[key]) === 'object') {
-				if (typeof(pattern[key]) !== 'object') {
-					return false;
-				}
-				return nodesMatch(node[key], pattern[key]);
-			}
-			return node[key] === pattern[key];
-		}, true);
-}
-function isExpression(node) {
-	return node.type.match(/Expression$/);
-}
-function isWildcardExpression(node) {
-	return node.type == 'Identifier' && node.name && node.name.match(/^[a-z]$/);
-}
-
-var output = replaceNode(rule.replacement, {
-	enter: function(node) {
-		// look for match
-		if (nodesMatch(node, rule.pattern)) {
-			console.log(node);
+	input(argv, function(error, input) {
+		if (error) {
+			return cb(error);
 		}
-	}
-});
-console.log(generate(output));
+		var ast = parse(input);
+		
+		var patternStr = JSON.stringify(rule.pattern);
+		//console.log('rule', patternStr);
+		var backreferenceLookup = {}, backreferenceCounter = 0;
+		patternRegex = patternStr.replace(/\{"type":"Identifier","name":"([a-z])"\}/g, 
+			function(match, wildcard) {
+				// Easy case - we've come across it before, add the back ref
+				if (backreferenceLookup[wildcard]) {
+					return '\\' + backreferenceLookup[wildcard];	
+				}
+				// Tough case - a new wildcard, add match and back ref to lookup
+				backreferenceLookup[wildcard] = ++backreferenceCounter;
+				return '(.*)';
+			});
+		// TODO: escape all regex stuff
+		patternRegex = patternRegex.replace(/\+/g, '\\+');
+		patternRegex = patternRegex.replace(/\{/g, '\\{').replace(/\}/g, '\\}');
+
+		var replacementStr = JSON.stringify(rule.replacement);
+		replacementStr = replacementStr.replace(/\{"type":"Identifier","name":"([a-z])"\}/g, 
+			function(match, wildcard) {
+				// Easy case - we've come across it before, add the back ref
+				if (backreferenceLookup[wildcard]) {
+					return '$' + backreferenceLookup[wildcard];	
+				}
+				// Tough case - we don't know it, assume it's meant to be a literal  
+				return match;
+			});
+
+
+		var astStr = JSON.stringify(ast);
+		var newAstStr = astStr.replace(new RegExp(patternRegex, 'g'), replacementStr);
+		//console.log(newAstStr);
+
+		console.log(generate(JSON.parse(newAstStr)));
+	});
+}
