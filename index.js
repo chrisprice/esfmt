@@ -35,7 +35,7 @@ if (argv.r) {
 				}
 				// Tough case - a new wildcard, add match and back ref to lookup
 				backreferenceLookup[wildcard] = ++backreferenceCounter;
-				return '(.*)';
+				return '(\{[^\}]*\})';
 			});
 		// TODO: escape all regex stuff
 		patternRegex = patternRegex.replace(/\+/g, '\\+');
