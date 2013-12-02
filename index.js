@@ -1,6 +1,7 @@
 var parse = require('esprima').parse,
 	replace = require('estraverse').replace,
 	WildcardMatcher = require('./lib/wildcardMatcher'),
+	Cloner = require('./lib/cloner'),
 	generate = require('escodegen').generate,
 	input = require('./lib/parse');
 
@@ -23,13 +24,13 @@ if (argv.r) {
 			return cb(error);
 		}
 		var ast = parse(input);
-		
+		var cloner = Cloner();
 		replace(ast, {
 			enter: function(node, parent) {
 				var wildcardMatcher = WildcardMatcher();
 				if (wildcardMatcher.match(rule.pattern, node)) {
-					console.log(wildcardMatcher.values);
-					return { type: 'Literal', value: 'MATCH' };
+					var replacement = cloner.clone(rule.replacement);
+					return wildcardMatcher.apply(replacement);
 				}
 			}
 		});
