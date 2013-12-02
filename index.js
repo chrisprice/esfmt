@@ -15,8 +15,8 @@ if (argv.r) {
 	var ruleParts = argv.r.split('->');
 	var rule = {
 		raw: argv.r,
-		pattern: parse(ruleParts[0]).body[0],
-		replacement: parse(ruleParts[1]).body[0]
+		pattern: parse(ruleParts[0]).body[0].expression,
+		replacement: parse(ruleParts[1]).body[0].expression
 	};
 
 	input(argv, function(error, input) {
