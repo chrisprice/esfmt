@@ -1,8 +1,8 @@
 var parse = require('esprima').parse,
-	replace = require('estraverse').replace,
 	WildcardMatcher = require('./lib/wildcardMatcher'),
 	Cloner = require('./lib/cloner'),
-	generate = require('escodegen').generate,
+	Walker = require('./lib/walker'),
+	escodegen = require('escodegen'),
 	input = require('./lib/parse');
 
 var argv = require('optimist')
@@ -10,6 +10,8 @@ var argv = require('optimist')
 	.options('r', 'rule')
 	.describe('r', 'Apply the rewrite rule to the source before reformatting.')
 	.argv;
+
+
 
 if (argv.r) {
 	var ruleParts = argv.r.split('->');
@@ -23,18 +25,26 @@ if (argv.r) {
 		if (error) {
 			return cb(error);
 		}
-		var ast = parse(input);
-		var cloner = Cloner();
-		replace(ast, {
-			enter: function(node, parent) {
+		var ast = parse(input, {range: true, tokens: true, comment: true});
+		ast = escodegen.attachComments(ast, ast.comments, ast.tokens);
+
+		var cloner = Cloner(), walker = Walker({ 
+			recurse: function(node, key, parent) {
 				var wildcardMatcher = WildcardMatcher();
 				if (wildcardMatcher.match(rule.pattern, node)) {
 					var replacement = cloner.clone(rule.replacement);
-					return wildcardMatcher.apply(replacement);
+					var newNode = wildcardMatcher.apply(replacement);
+					parent[key] = newNode;
+				} else {
+					walker.walk(node, key, parent);
 				}
 			}
 		});
 
-		console.log(generate(ast));
+		// TODO won't replace root
+		walker.walk(ast);
+
+		var output = escodegen.generate(ast, {comment: true});
+		console.log(output);
 	});
 }
