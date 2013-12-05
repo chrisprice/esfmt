@@ -23,23 +23,20 @@ function parseRulePart(part) {
 	return node;
 }
 
+function transform(input, cb) {
+	var ast = parse(input, {range: true, tokens: true, comment: true});
+	ast = escodegen.attachComments(ast, ast.comments, ast.tokens);
 
-if (argv.r) {
-	var ruleParts = argv.r.split('->');
-	var rule = {
-		raw: argv.r,
-		pattern: parseRulePart(ruleParts[0]),
-		replacement: parseRulePart(ruleParts[1])
-	};
+	var substitutions = [];
 
-	input(argv, function(error, input) {
-		if (error) {
-			return cb(error);
-		}
-		var ast = parse(input, {range: true, tokens: true, comment: true});
-		ast = escodegen.attachComments(ast, ast.comments, ast.tokens);
+	if (argv.r) {
+		var ruleParts = argv.r.split('->');
+		var rule = {
+			raw: argv.r,
+			pattern: parseRulePart(ruleParts[0]),
+			replacement: parseRulePart(ruleParts[1])
+		};
 
-		var substitutions = [];
 		var cloner = Cloner(), walker = Walker({ 
 			recurse: function(node, key, parent) {
 				var wildcardMatcher = WildcardMatcher();
@@ -53,22 +50,26 @@ if (argv.r) {
 				}
 			}
 		});
-
 		// TODO won't replace root
 		walker.walk(ast);
+	}
 
-		var output;
-		if (argv.c) {
-			output = substitutions.reduceRight(function(source, sub) {
-				console.log(sub.original.range);
-				var replacementSource = escodegen.generate(sub.replacement);
-				return source.substring(0, sub.original.range[0]) +
-					escodegen.generate(sub.replacement) +
-					source.substring(sub.original.range[1]);
-			}, input);
-		} else {
-			output = escodegen.generate(ast, {comment: true});
-		}
-		console.log(output);
-	});
+	var output;
+	if (argv.c && argv.r) {
+		output = substitutions.reduceRight(function(source, sub) {
+			console.log(sub.original.range);
+			var replacementSource = escodegen.generate(sub.replacement);
+			return source.substring(0, sub.original.range[0]) +
+				escodegen.generate(sub.replacement) +
+				source.substring(sub.original.range[1]);
+		}, input);
+	} else {
+		output = escodegen.generate(ast, {comment: true});
+	}
+
+	cb(null, output);
 }
+
+input(argv, transform, function(error) {
+	console.error(error);
+ });
