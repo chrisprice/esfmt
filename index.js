@@ -57,7 +57,6 @@ function transform(input, cb) {
 	var output;
 	if (argv.c && argv.r) {
 		output = substitutions.reduceRight(function(source, sub) {
-			console.log(sub.original.range);
 			var replacementSource = escodegen.generate(sub.replacement);
 			return source.substring(0, sub.original.range[0]) +
 				escodegen.generate(sub.replacement) +
