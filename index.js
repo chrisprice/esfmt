@@ -12,6 +12,9 @@ var argv = require('optimist')
 	.options('c', 'clinical')
 	.describe('c', 'Attempt a clinical replacement of matched rules rather than reformatting the entire file')
 	.boolean('c')
+	.options('ast', 'dump-ast')
+	.describe('ast', 'Dump the AST to the console')
+	.boolean('ast')
 	.argv;
 
 function parseRulePart(part) {
@@ -55,6 +58,9 @@ function transform(input, cb) {
 	}
 
 	var output;
+	if (argv.t) {
+		console.log(JSON.stringify(ast, null, 2));
+	}
 	if (argv.c && argv.r) {
 		output = substitutions.reduceRight(function(source, sub) {
 			var replacementSource = escodegen.generate(sub.replacement);
@@ -62,8 +68,10 @@ function transform(input, cb) {
 				escodegen.generate(sub.replacement) +
 				source.substring(sub.original.range[1]);
 		}, input);
-	} else {
+	} else if (argv.r) {
 		output = escodegen.generate(ast, {comment: true});
+	} else {
+		output = input;
 	}
 
 	cb(null, output);
