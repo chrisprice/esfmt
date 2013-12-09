@@ -3,7 +3,8 @@ var parse = require('esprima').parse,
 	Cloner = require('./lib/cloner'),
 	Walker = require('./lib/walker'),
 	escodegen = require('escodegen'),
-	input = require('./lib/parse');
+	input = require('./lib/parse'),
+	diff = require('diff');
 
 var argv = require('optimist')
 	.usage('$0 [flags] [path ...]')
@@ -12,9 +13,12 @@ var argv = require('optimist')
 	.options('c', 'clinical')
 	.describe('c', 'Attempt a clinical replacement of matched rules rather than reformatting the entire file')
 	.boolean('c')
-	.options('ast', 'dump-ast')
-	.describe('ast', 'Dump the AST to the console')
-	.boolean('ast')
+	.options('d', 'diff')
+	.describe('d', 'If a file\'s formatting is different than esfmt\'s, print diffs to standard output.')
+	.boolean('d')
+	.options('w', 'write')
+	.describe('w', 'Overwrite the file with the formatted version')
+	.boolean('w')
 	.argv;
 
 function parseRulePart(part) {
@@ -26,7 +30,7 @@ function parseRulePart(part) {
 	return node;
 }
 
-function transform(input, cb) {
+function transform(file, input, cb) {
 	var ast = parse(input, {range: true, tokens: true, comment: true});
 	ast = escodegen.attachComments(ast, ast.comments, ast.tokens);
 
@@ -68,13 +72,20 @@ function transform(input, cb) {
 				escodegen.generate(sub.replacement) +
 				source.substring(sub.original.range[1]);
 		}, input);
-	} else if (argv.r) {
-		output = escodegen.generate(ast, {comment: true});
 	} else {
-		output = input;
+		output = escodegen.generate(ast, {comment: true});
 	}
 
-	cb(null, output);
+	if (argv.w) {
+		cb(null, output);
+	} else {
+		if (argv.d) {
+			console.log(diff.createPatch(file, input, output));
+		} else {
+			console.log(output);
+		}
+		cb();
+	}
 }
 
 input(argv, transform, function(error) {
